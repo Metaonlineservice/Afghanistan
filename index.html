@@ -9,11 +9,10 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/vanta@latest/dist/vanta.waves.min.js"></script>
     
-    <!-- اتصال به کتابخانه رسمی EmailJS -->
     <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
     <script type="text/javascript">
-        // کلید عمومی اکانت EmailJS خود را اینجا جایگزین کنید
-        emailjs.init("YOUR_EMAILJS_PUBLIC_KEY");
+        // مقداردهی اولیه با Public Key ارسالی شما
+        emailjs.init("GeH0jc48LNtGn4dsi");
     </script>
     
     <style>
@@ -42,7 +41,7 @@
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
             <div class="flex items-center gap-3">
                 <div class="w-14 h-14 rounded-xl overflow-hidden border border-gray-700 shadow-md flex items-center justify-center bg-black">
-                    <img src="https://lh3.googleusercontent.com/d/1h5DWLhrMRh2vDw8yGSxuxBNZmGjZJ9Xq" alt="Meta Online Logo" class="w-full h-full object-cover">
+                    <img src="https://lh3.googleusercontent.com/d/168vsgnLliyZICUDhy43r_ORWKpfr3cad" alt="Meta Online Logo" class="w-full h-full object-cover">
                 </div>
                 <div>
                     <h1 class="text-xl font-black text-transparent bg-clip-text bg-gradient-to-l from-blue-400 to-indigo-400">متا آنلاین</h1>
@@ -194,7 +193,7 @@
             waveSpeed: 0.60
         });
 
-        // ۲. منطق جاابجایی بین فرم‌های کشورهای مختلف
+        // ۲. منطق جابجایی بین فرم‌های کشورهای مختلف
         const countryNames = {
             australia: "استرالیا",
             germany: "آلمان",
@@ -231,8 +230,8 @@
             sidebar.classList.toggle('hidden');
         });
 
-        // ۳. اتصال به گوگل شیت و سرویس EmailJS با رفع خطای CORS در گیت‌هاب
-        const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbxEmyv0HUu4Vv8-KlhMtzZ3nlQALYVXibQkRuSBV743zX7IRpUfk6rqY-ZOX2TYZEZBkg/exec";
+        // ۳. اتصال مستقیم به API سرویس SheetDB و ارسال هوشمند ایمیل با لایه محافظتی ضد مسدودی شبکه‌ای
+        const SHEETDB_API_URL = "https://sheetdb.io/api/v1/pra0bquhmf8fk";
         const EMAILJS_SERVICE_ID = "service_qogogdp";
         const EMAILJS_TEMPLATE_ID = "template_7y36m2h";
 
@@ -249,42 +248,72 @@
             loadingSpinner.classList.remove('hidden');
             btnIcon.classList.add('hidden');
 
-            const formData = new FormData(form);
-            
-            // تولید شناسه (Registration ID) روی مرورگر کاربر برای جلوگیری از خطای امنیتی گیت‌هاب
+            // ایجاد شماره راجستریشن اختصاصی و زمان ثبت درخواست
             const timestamp = new Date();
             const randomNum = Math.floor(1000 + Math.random() * 9000);
             const regId = "MO-" + timestamp.getFullYear() + "-" + randomNum;
-            
-            // اضافه کردن شناسه به داده‌ها برای ارسال به گوگل شیت
-            formData.append("registration_id", regId);
+            const farsiTime = timestamp.toLocaleString('fa-IR');
+            const isoTime = timestamp.toISOString().split('T')[0] + " " + timestamp.toTimeString().split(' ')[0];
 
-            // ارسال اطلاعات به گوگل شیت با حالت no-cors
-            fetch(WEB_APP_URL, {
+            // ساخت شیء داده بر اساس نام دقیق ستون‌های گوگل شیت شما
+            const rowData = {
+                "data": [
+                    {
+                        "Timestamp": isoTime,
+                        "Registration ID": regId,
+                        "Country": form.country.value,
+                        "Full Name": form.full_name.value,
+                        "Father Name": form.father_name.value,
+                        "Phone": form.phone.value,
+                        "Email": form.email.value,
+                        "Document ID": form.document_id.value,
+                        "Current Location": form.current_location.value,
+                        "Case Details": form.case_details.value
+                    }
+                ]
+            };
+
+            // مرحله اول: ذخیره‌سازی آسان در گوگل شیت بدون مشکل CORS از طریق SheetDB
+            fetch(SHEETDB_API_URL, {
                 method: 'POST',
-                body: formData,
-                mode: 'no-cors' // این پارامتر مشکل CORS گیت‌هاب را حل می‌کند
+                headers: {
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(rowData)
             })
-            .then(() => {
-                // ارسال اطلاعات به EmailJS پس از ارسال موفق به گوگل شیت
-                const currentTime = new Date().toLocaleString('fa-IR');
+            .then(response => {
+                if(!response.ok) {
+                    throw new Error("خطا در ذخیره‌سازی اطلاعات جدول");
+                }
+                return response.json();
+            })
+            .then(data => {
+                // مرحله دوم: تلاش برای ارسال ایمیل با EmailJS
                 const emailParams = {
-                    full_name: formData.get('full_name'),
-                    country: formData.get('country'),
-                    email: formData.get('email'),
+                    full_name: form.full_name.value,
+                    country: form.country.value,
+                    email: form.email.value,
                     registration_id: regId,
-                    time: currentTime
+                    time: farsiTime
                 };
 
-                return emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, emailParams);
-            })
-            .then(emailResponse => {
-                alert("درخواست شما با موفقیت ثبت شد! شماره ثبت‌نام شما: " + regId + " است که به ایمیلتان نیز ارسال گردید.");
-                form.reset();
+                return emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, emailParams)
+                    .then(() => {
+                        // ایمیل با موفقیت فرستاده شد
+                        alert("درخواست شما با موفقیت ثبت شد! شماره ثبت‌نام شما: " + regId + " است که به ایمیلتان نیز ارسال گردید.");
+                        form.reset();
+                    })
+                    .catch(emailError => {
+                        // اگر سرور ایمیل بلاک یا فیلتر بود، این بخش مانع توقف فرآیند کار شده و پیام موفقیت شیت را می‌دهد
+                        console.warn("EmailJS Network Blocked:", emailError);
+                        alert("اطلاعات شما در سیستم گوگل شیت با موفقیت ذخیره شد! شماره راجستریشن شما: " + regId + " است. (به دلیل اختلال موقت در شبکه، ایمیل تاییدیه ارسال نشد، لطفاً این شماره را یادداشت کنید)");
+                        form.reset();
+                    });
             })
             .catch(error => {
-                console.error('Error!', error.message);
-                alert("اطلاعات ثبت شد اما در ارسال ایمیل تاییدیه خطایی رخ داد. لطفا شماره راجستریشن خود را یادداشت کنید: " + regId);
+                console.error('Network Error!', error);
+                alert("خطایی در اتصال به شبکه یا سرور رخ داد. لطفاً فیلترشکن خود را بررسی کرده و چند لحظه بعد دوباره تلاش کنید.");
             })
             .finally(() => {
                 submitBtn.disabled = false;
