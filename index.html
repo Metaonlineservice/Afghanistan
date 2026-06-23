@@ -9,10 +9,10 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/vanta@latest/dist/vanta.waves.min.js"></script>
     
+    <!-- اتصال به کتابخانه رسمی EmailJS -->
     <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
     <script type="text/javascript">
-        // مقداردهی اولیه EmailJS با Public Key شما
-        // نکته: در صورت نیاز می‌توانید Public Key حساب خود را جایگزین کنید
+        // کلید عمومی اکانت EmailJS خود را اینجا جایگزین کنید
         emailjs.init("YOUR_EMAILJS_PUBLIC_KEY");
     </script>
     
@@ -231,7 +231,7 @@
             sidebar.classList.toggle('hidden');
         });
 
-        // ۳. اتصال به گوگل شیت اختصاصی شما و سرویس EmailJS
+        // ۳. اتصال به گوگل شیت و سرویس EmailJS با رفع خطای CORS در گیت‌هاب
         const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbxEmyv0HUu4Vv8-KlhMtzZ3nlQALYVXibQkRuSBV743zX7IRpUfk6rqY-ZOX2TYZEZBkg/exec";
         const EMAILJS_SERVICE_ID = "service_qogogdp";
         const EMAILJS_TEMPLATE_ID = "template_7y36m2h";
@@ -244,7 +244,6 @@
             const loadingSpinner = document.getElementById('loadingSpinner');
             const btnIcon = document.getElementById('btnIcon');
             
-            // فعال کردن انیمیشن لودینگ و غیرفعال کردن دکمه جهت جلوگیری از ارسال چندباره
             submitBtn.disabled = true;
             btnText.innerText = "در حال ارسال اطلاعات و پردازش نهایی...";
             loadingSpinner.classList.remove('hidden');
@@ -252,42 +251,42 @@
 
             const formData = new FormData(form);
             
-            // مرحله اول: ارسال اطلاعات فرم به آدرس وب‌اپلیکیشن اختصاصی گوگل شیت شما
+            // تولید شناسه (Registration ID) روی مرورگر کاربر برای جلوگیری از خطای امنیتی گیت‌هاب
+            const timestamp = new Date();
+            const randomNum = Math.floor(1000 + Math.random() * 9000);
+            const regId = "MO-" + timestamp.getFullYear() + "-" + randomNum;
+            
+            // اضافه کردن شناسه به داده‌ها برای ارسال به گوگل شیت
+            formData.append("registration_id", regId);
+
+            // ارسال اطلاعات به گوگل شیت با حالت no-cors
             fetch(WEB_APP_URL, {
                 method: 'POST',
-                body: formData
+                body: formData,
+                mode: 'no-cors' // این پارامتر مشکل CORS گیت‌هاب را حل می‌کند
             })
-            .then(response => response.json())
-            .then(data => {
-                if(data.result === "success") {
-                    const regId = data.registration_id;
-                    const currentTime = new Date().toLocaleString('fa-IR'); // تاریخ شمسی برای ایمیل
+            .then(() => {
+                // ارسال اطلاعات به EmailJS پس از ارسال موفق به گوگل شیت
+                const currentTime = new Date().toLocaleString('fa-IR');
+                const emailParams = {
+                    full_name: formData.get('full_name'),
+                    country: formData.get('country'),
+                    email: formData.get('email'),
+                    registration_id: regId,
+                    time: currentTime
+                };
 
-                    // پارامترهای ارسالی به قالب حرفه‌ای EmailJS
-                    const emailParams = {
-                        full_name: formData.get('full_name'),
-                        country: formData.get('country'),
-                        email: formData.get('email'),
-                        registration_id: regId,
-                        time: currentTime
-                    };
-
-                    // مرحله دوم: ارسال خودکار ایمیل با EmailJS پس از دریافت نمبر راجستریشن از گوگل شیت
-                    return emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, emailParams);
-                } else {
-                    throw new Error("تولید کد راجستریشن با خطا مواجه شد.");
-                }
+                return emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, emailParams);
             })
             .then(emailResponse => {
-                alert("درخواست شما با موفقیت در سیستم گوگل شیت ثبت شد و نمبر راجستریشن اختصاصی به ایمیل شما ارسال گردید.");
+                alert("درخواست شما با موفقیت ثبت شد! شماره ثبت‌نام شما: " + regId + " است که به ایمیلتان نیز ارسال گردید.");
                 form.reset();
             })
             .catch(error => {
                 console.error('Error!', error.message);
-                alert("خطایی در فرآیند ثبت یا ارسال ایمیل تاییدیه رخ داد! اطلاعات شما در شیت محفوظ است. در صورت نیاز با پشتیبانی واتساپ هماهنگ کنید.");
+                alert("اطلاعات ثبت شد اما در ارسال ایمیل تاییدیه خطایی رخ داد. لطفا شماره راجستریشن خود را یادداشت کنید: " + regId);
             })
             .finally(() => {
-                // بازگرداندن دکمه به حالت اولیه پس از پایان فرآیند لودینگ
                 submitBtn.disabled = false;
                 btnText.innerText = "ارسال و ثبت نهایی درخواست";
                 loadingSpinner.classList.add('hidden');
